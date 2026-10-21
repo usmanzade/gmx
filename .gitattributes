@@ -1,0 +1,2 @@
+* text=auto
+apks/13.2.2.0.apks filter=lfs diff=lfs merge=lfs -text

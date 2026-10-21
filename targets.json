@@ -1,0 +1,81 @@
+{
+  "schema": 1,
+  "package": "ir.ilmili.telegraph",
+  "device_tested": ["13.0.2.0"],
+  "targets": [
+    {
+      "id": "launch",
+      "role": "anchor",
+      "params": ["android.os.Bundle"],
+      "returns": "void",
+      "variants": [
+        {"class": "org.telegram.ui.LaunchActivity", "method": "onCreate", "versions": ["13.0.2.0"]}
+      ]
+    },
+    {
+      "id": "premium",
+      "role": "constant",
+      "group": "telegram",
+      "value": true,
+      "params": [],
+      "returns": "boolean",
+      "marker": "org.telegram.tgnet.TLRPC$User",
+      "fingerprint": {
+        "owner_field": "org.telegram.tgnet.TLRPC$User",
+        "reads_field": ["org.telegram.tgnet.TLRPC$User", "premium"],
+        "trusted_on": "13.0.2.0"
+      },
+      "variants": [
+        {"class": "org.telegram.messenger.v40", "method": "w", "versions": ["13.0.2.0"]}
+      ]
+    },
+    {
+      "id": "expire",
+      "role": "constant",
+      "group": "telegraph",
+      "native": true,
+      "value": false,
+      "params": ["long"],
+      "returns": null,
+      "variants": [
+        {"class": "org.telegram.tgnet.ConnectionsManager", "method": "native_expireFile", "versions": ["13.0.2.0"]}
+      ]
+    },
+    {
+      "id": "days",
+      "role": "constant",
+      "group": "telegraph",
+      "native": true,
+      "value": 999,
+      "params": ["long"],
+      "returns": null,
+      "variants": [
+        {"class": "org.telegram.tgnet.ConnectionsManager", "method": "native_daysFile", "versions": ["13.0.2.0"]}
+      ]
+    },
+    {
+      "id": "license",
+      "role": "constant",
+      "group": "telegraph",
+      "native": true,
+      "value": true,
+      "params": ["long"],
+      "returns": null,
+      "variants": [
+        {"class": "org.telegram.tgnet.ConnectionsManager", "method": "native_checkLicense", "versions": ["13.0.2.0"]}
+      ]
+    },
+    {
+      "id": "remove",
+      "role": "constant",
+      "group": "telegraph",
+      "native": true,
+      "value": true,
+      "params": ["int", "boolean"],
+      "returns": null,
+      "variants": [
+        {"class": "org.telegram.tgnet.ConnectionsManager", "method": "native_removeInstance", "versions": ["13.0.2.0"]}
+      ]
+    }
+  ]
+}
