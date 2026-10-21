@@ -1,0 +1,165 @@
+name: Toolchain watch
+
+on:
+  schedule:
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: toolchain
+  cancel-in-progress: false
+
+jobs:
+  jdk:
+    name: Newest JDK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Find the newest stable JDK
+        id: version
+        run: |
+          latest=$(curl -fsSL https://api.adoptium.net/v3/info/available_releases \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["most_recent_feature_release"])')
+          python3 tools/toolchain.py compare .java-version "${latest}" --parts 1 | tee -a "$GITHUB_OUTPUT"
+
+      - name: Set up the newest JDK
+        id: java
+        if: steps.version.outputs.newer == 'true'
+        continue-on-error: true
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: ${{ steps.version.outputs.latest }}
+
+      - name: Set up Gradle
+        if: steps.java.outcome == 'success'
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Build with it
+        id: check
+        if: steps.java.outcome == 'success'
+        continue-on-error: true
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          chmod +x gradlew
+          ./gradlew --stacktrace :app:assembleDebug :app:assembleRelease
+
+      - name: Summary
+        env:
+          LATEST: ${{ steps.version.outputs.latest }}
+          NEWER: ${{ steps.version.outputs.newer }}
+          JAVA: ${{ steps.java.outcome }}
+          CHECK: ${{ steps.check.outcome }}
+        run: |
+          {
+            echo "JDK in use: $(cat .java-version). Newest stable: ${LATEST}."
+            if [ "${NEWER}" != "true" ]; then
+              echo "Nothing newer."
+            elif [ "${JAVA}" != "success" ]; then
+              echo "JDK ${LATEST} could not be set up yet (not published for setup-java?). No change."
+            elif [ "${CHECK}" != "success" ]; then
+              echo "The build fails on JDK ${LATEST}. No change; see the build step for the error."
+            else
+              echo "The build passes on JDK ${LATEST}: a pull request is opened."
+            fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Open pull request
+        if: steps.check.outcome == 'success'
+        env:
+          LATEST: ${{ steps.version.outputs.latest }}
+        run: |
+          branch="toolchain/jdk-${LATEST}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python3 tools/toolchain.py bump .java-version "${LATEST}"
+          git checkout -b "${branch}"
+          git add .java-version
+          git commit -m "Build with JDK ${LATEST}"
+          git push --force origin "${branch}"
+          body="The project builds (debug and release) with JDK ${LATEST}. Merging switches the JDK used by every workflow."
+          gh label create dependencies --color 0366d6 --description "Dependency updates" > /dev/null 2>&1 || true
+          if gh pr view "${branch}" > /dev/null 2>&1; then
+            gh pr edit "${branch}" --title "Build with JDK ${LATEST}" --body "${body}"
+          else
+            gh pr create --base main --head "${branch}" --title "Build with JDK ${LATEST}" --body "${body}" --label dependencies
+          fi
+
+  python:
+    name: Newest Python
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up the newest stable Python
+        id: python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+
+      - name: Compare with .python-version
+        id: version
+        run: |
+          latest=$(python -c 'import sys; print("%d.%d" % sys.version_info[:2])')
+          python tools/toolchain.py compare .python-version "${latest}" --parts 2 | tee -a "$GITHUB_OUTPUT"
+
+      - name: Install and test with it
+        id: check
+        if: steps.version.outputs.newer == 'true'
+        continue-on-error: true
+        run: |
+          python -m pip install -r tools/requirements.txt
+          python -c "import androguard"
+          python -m unittest discover -s tools -p 'test_*.py'
+          python tools/adapt.py gen --check
+
+      - name: Summary
+        env:
+          LATEST: ${{ steps.version.outputs.latest }}
+          NEWER: ${{ steps.version.outputs.newer }}
+          CHECK: ${{ steps.check.outcome }}
+        run: |
+          {
+            echo "Python in use: $(cat .python-version). Newest stable: ${LATEST}."
+            if [ "${NEWER}" != "true" ]; then
+              echo "Nothing newer."
+            elif [ "${CHECK}" != "success" ]; then
+              echo "The dependencies or tests fail on Python ${LATEST} (usually a dependency without a wheel yet). No change."
+            else
+              echo "Everything passes on Python ${LATEST}: a pull request is opened."
+            fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Open pull request
+        if: steps.check.outcome == 'success'
+        env:
+          LATEST: ${{ steps.version.outputs.latest }}
+        run: |
+          branch="toolchain/python-${LATEST}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          python tools/toolchain.py bump .python-version "${LATEST}"
+          git checkout -b "${branch}"
+          git add .python-version
+          git commit -m "Use Python ${LATEST}"
+          git push --force origin "${branch}"
+          body="The dependencies install and the tool tests pass on Python ${LATEST}. Merging switches the Python used by every workflow."
+          gh label create dependencies --color 0366d6 --description "Dependency updates" > /dev/null 2>&1 || true
+          if gh pr view "${branch}" > /dev/null 2>&1; then
+            gh pr edit "${branch}" --title "Use Python ${LATEST}" --body "${body}"
+          else
+            gh pr create --base main --head "${branch}" --title "Use Python ${LATEST}" --body "${body}" --label dependencies
+          fi

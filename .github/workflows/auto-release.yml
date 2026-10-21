@@ -1,0 +1,29 @@
+name: Auto release
+
+on:
+  push:
+    branches: [main]
+    paths: [gradle.properties]
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Start release if the tag does not exist yet
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(grep '^GMX_VERSION_NAME=' gradle.properties | cut -d= -f2)
+          if git ls-remote --exit-code --tags origin "refs/tags/v${version}" > /dev/null; then
+            echo "Tag v${version} already exists; nothing to release."
+            exit 0
+          fi
+          gh workflow run release.yml --repo "${GITHUB_REPOSITORY}" --ref main -f tag="v${version}"

@@ -1,0 +1,138 @@
+name: Adapt to Graph build
+
+on:
+  workflow_dispatch:
+    inputs:
+      apks_url:
+        description: Direct URL of a Graph Messenger .apks/.apkm/.apk (optional)
+        required: false
+  push:
+    branches: [main]
+    paths: ['apks/**']
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: adapt
+  cancel-in-progress: false
+
+jobs:
+  adapt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      GH_TOKEN: ${{ github.token }}
+      APKS_URL: ${{ inputs.apks_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: .python-version
+
+      - name: Install tool dependencies
+        run: pip install -r tools/requirements.txt
+
+      - name: Tool tests
+        run: python3 -m unittest discover -s tools -p 'test_*.py'
+
+      - name: Get the Graph Messenger build
+        run: |
+          if [ -n "${APKS_URL}" ]; then
+            curl -fL --retry 3 -o "${RUNNER_TEMP}/graph-build" "${APKS_URL}"
+            echo "BUILD_FILE=${RUNNER_TEMP}/graph-build" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          file=""
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            file=$(git diff --name-only --diff-filter=AM HEAD~1 HEAD -- 'apks/*' | grep -v '\.gitkeep$' | tail -n 1 || true)
+          fi
+          if [ -z "${file}" ]; then
+            file=$(ls -t apks/* 2>/dev/null | grep -v '\.gitkeep$' | head -n 1 || true)
+          fi
+          if [ -z "${file}" ]; then
+            echo "No build to analyze: give apks_url or put a file in apks/" >&2
+            exit 1
+          fi
+          echo "BUILD_FILE=${file}" >> "$GITHUB_ENV"
+
+      - name: Analyze and update targets
+        id: analyze
+        run: |
+          set +e
+          python3 tools/adapt.py analyze "${BUILD_FILE}" --apply --report report.md
+          echo "rc=$?" >> "$GITHUB_OUTPUT"
+          test -s report.md
+          echo "version=$(head -n 1 report.md | sed 's/^## Graph Messenger //')" >> "$GITHUB_OUTPUT"
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+
+      - name: Detect changes
+        id: diff
+        run: |
+          if git diff --quiet -- targets.json SUPPORTED.md gradle.properties app/src; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+          if git diff --quiet -- app/src gradle.properties; then
+            echo "module=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "module=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up JDK
+        if: steps.diff.outputs.module == 'true'
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version-file: .java-version
+
+      - name: Set up Gradle
+        if: steps.diff.outputs.module == 'true'
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Build the changed module
+        if: steps.diff.outputs.module == 'true'
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          chmod +x gradlew
+          ./gradlew --stacktrace :app:assembleDebug
+
+      - name: Open pull request
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          VERSION: ${{ steps.analyze.outputs.version }}
+          MODULE_CHANGED: ${{ steps.diff.outputs.module }}
+        run: |
+          version="$(printf '%s' "${VERSION}" | tr -c 'A-Za-z0-9._-' '_')"
+          branch="adapt/graph-${version}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "${branch}"
+          git add targets.json SUPPORTED.md gradle.properties app/src/main/java/com/usmanzade/gmx/Targets.java
+          git commit -m "Adapt to Graph Messenger ${version}"
+          git push --force origin "${branch}"
+          if [ "${MODULE_CHANGED}" = "true" ]; then
+            title="Adapt hook targets to Graph Messenger ${version}"
+          else
+            title="Record Graph Messenger ${version} as supported"
+          fi
+          gh label create targets --color 22D3EE --description "Hook target updates" > /dev/null 2>&1 || true
+          if gh pr view "${branch}" > /dev/null 2>&1; then
+            gh pr edit "${branch}" --title "${title}" --body-file report.md --add-label targets
+          else
+            gh pr create --base main --head "${branch}" --title "${title}" --body-file report.md --label targets
+          fi
+
+      - name: Fail when a target needs a human
+        if: steps.analyze.outputs.rc != '0'
+        run: |
+          echo "At least one target is SUSPECT, AMBIGUOUS or MISSING. See the report above." >&2
+          exit 1
