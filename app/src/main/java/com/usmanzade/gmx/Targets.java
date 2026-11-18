@@ -6,7 +6,7 @@ final class Targets {
     static final Target LAUNCH = new Target("launch", null, null, false, new String[] {"android.os.Bundle"}, "void", null,
             new String[][] {{"org.telegram.ui.LaunchActivity", "onCreate"}});
     static final Target PREMIUM = new Target("premium", "telegram", Boolean.TRUE, false, new String[] {}, "boolean", "org.telegram.tgnet.TLRPC$User",
-            new String[][] {{"org.telegram.messenger.v40", "w"}});
+            new String[][] {{"org.telegram.messenger.w60", "w"}, {"org.telegram.messenger.v40", "w"}});
     static final Target EXPIRE = new Target("expire", "telegraph", Boolean.FALSE, true, new String[] {"long"}, null, null,
             new String[][] {{"org.telegram.tgnet.ConnectionsManager", "native_expireFile"}});
     static final Target DAYS = new Target("days", "telegraph", Integer.valueOf(999), true, new String[] {"long"}, null, null,
