@@ -9,7 +9,7 @@
       "params": ["android.os.Bundle"],
       "returns": "void",
       "variants": [
-        {"class": "org.telegram.ui.LaunchActivity", "method": "onCreate", "versions": ["13.0.2.0"]}
+        {"class": "org.telegram.ui.LaunchActivity", "method": "onCreate", "versions": ["13.0.2.0", "13.2.2.0", "13.2.2.1"]}
       ]
     },
     {
@@ -26,6 +26,7 @@
         "trusted_on": "13.0.2.0"
       },
       "variants": [
+        {"class": "org.telegram.messenger.w60", "method": "w", "versions": ["13.2.2.0", "13.2.2.1"], "auto": true},
         {"class": "org.telegram.messenger.v40", "method": "w", "versions": ["13.0.2.0"]}
       ]
     },
@@ -38,7 +39,7 @@
       "params": ["long"],
       "returns": null,
       "variants": [
-        {"class": "org.telegram.tgnet.ConnectionsManager", "method": "native_expireFile", "versions": ["13.0.2.0"]}
+        {"class": "org.telegram.tgnet.ConnectionsManager", "method": "native_expireFile", "versions": ["13.0.2.0", "13.2.2.0", "13.2.2.1"]}
       ]
     },
     {
@@ -50,7 +51,7 @@
       "params": ["long"],
       "returns": null,
       "variants": [
-        {"class": "org.telegram.tgnet.ConnectionsManager", "method": "native_daysFile", "versions": ["13.0.2.0"]}
+        {"class": "org.telegram.tgnet.ConnectionsManager", "method": "native_daysFile", "versions": ["13.0.2.0", "13.2.2.0", "13.2.2.1"]}
       ]
     },
     {
@@ -62,7 +63,7 @@
       "params": ["long"],
       "returns": null,
       "variants": [
-        {"class": "org.telegram.tgnet.ConnectionsManager", "method": "native_checkLicense", "versions": ["13.0.2.0"]}
+        {"class": "org.telegram.tgnet.ConnectionsManager", "method": "native_checkLicense", "versions": ["13.0.2.0", "13.2.2.0", "13.2.2.1"]}
       ]
     },
     {
@@ -74,7 +75,7 @@
       "params": ["int", "boolean"],
       "returns": null,
       "variants": [
-        {"class": "org.telegram.tgnet.ConnectionsManager", "method": "native_removeInstance", "versions": ["13.0.2.0"]}
+        {"class": "org.telegram.tgnet.ConnectionsManager", "method": "native_removeInstance", "versions": ["13.0.2.0", "13.2.2.0", "13.2.2.1"]}
       ]
     }
   ]
